@@ -98,6 +98,9 @@ def find_restaurant_details(lat, lng, restaurant_type):
     # Get nearby establishments within 1 km
     nearby_establishments = get_nearby_establishments(lat, lng)
 
+    # Initialize a list to store place categories
+    places = []
+    
     # Initialize a list to store numeric values corresponding to place categories
     numbers = []
 
@@ -109,6 +112,10 @@ def find_restaurant_details(lat, lng, restaurant_type):
         broader_category = map_to_broader_category(place_types)
 
         if broader_category:
+            # Add unique broader category to the places list
+            if broader_category not in places:
+                places.append(broader_category)
+            
             # Get the numeric value for this broader category from the dictionary
             numeric_value = get_numeric_value_for_place(broader_category)
             if numeric_value is not None:
@@ -121,7 +128,7 @@ def find_restaurant_details(lat, lng, restaurant_type):
         Avg_population_density = 0
 
     # Display the results
-    print(f"Nearby Establishments within 1 km: {[place['name'] for place in nearby_establishments]}")
+    print(f"Unique Place Categories within 1 km: {places}")
     print(f"List of numeric values (population densities) for nearby places: {numbers}")
     print(f"Average Population Density: {Avg_population_density}")
 

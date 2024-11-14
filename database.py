@@ -54,6 +54,59 @@ def get_numeric_value_for_place(place_category):
     normalized_json_keys = {key.lower().replace(" ", "_"): value for key, value in place_data.items()}
     return normalized_json_keys.get(place_category, None)
 
+# Function to calculate average traffic using Google Maps Distance Matrix API
+def calculate_average_traffic(lat, lng, radius=1000):
+    # Define destinations for traffic checks (some random points within 1km)
+    destinations = [
+        f"{lat + 0.005},{lng}",
+        f"{lat - 0.005},{lng}",
+        f"{lat},{lng + 0.005}",
+        f"{lat},{lng - 0.005}"
+    ]
+    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={lat},{lng}&destinations={'|'.join(destinations)}&departure_time=now&key={GOOGLE_MAPS_API_KEY}"
+    
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        travel_times = [element['duration_in_traffic']['value'] for row in data['rows'] for element in row['elements']]
+        avg_traffic_time = sum(travel_times) / len(travel_times) if travel_times else None
+        return avg_traffic_time / 60 if avg_traffic_time else None  # Convert to minutes
+    else:
+        print("Error fetching traffic data.")
+        return None
+
+# Function to find the distance to the nearest main road using Google Maps Roads API
+def find_distance_to_nearest_main_road(lat, lng):
+    url = f"https://roads.googleapis.com/v1/nearestRoads?points={lat},{lng}&key={GOOGLE_MAPS_API_KEY}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        result = response.json()
+        if 'snappedPoints' in result:
+            nearest_road_location = result['snappedPoints'][0]['location']
+            nearest_lat = nearest_road_location['latitude']
+            nearest_lng = nearest_road_location['longitude']
+            
+            # Use Haversine formula to calculate distance to the nearest road
+            distance = calculate_distance(lat, lng, nearest_lat, nearest_lng)
+            return distance
+        else:
+            return None
+    else:
+        print("Error fetching road data.")
+        return None
+
+# Function to calculate the distance between two latitude and longitude points (Haversine formula)
+import math
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371  # Earth radius in kilometers
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = math.sin(d_lat/2) * math.sin(d_lat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon/2) * math.sin(d_lon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    distance = R * c  # Distance in kilometers
+    return distance * 1000  # Convert to meters
+
 # Main function to handle user input and show results
 def find_restaurant_details(lat, lng, restaurant_type):
     # Get nearby establishments within 1 km
@@ -90,12 +143,20 @@ def find_restaurant_details(lat, lng, restaurant_type):
     else:
         Avg_population_density = 0
 
+    # Get average traffic in the area
+    avg_traffic = calculate_average_traffic(lat, lng)
+
+    # Find distance to nearest main road
+    distance_to_main_road = find_distance_to_nearest_main_road(lat, lng)
+
     # Display the results
     print(f"Unique Place Categories within 1 km: {places}")
     print(f"Length of places list: {len(places)}")
     print(f"List of numeric values (population densities) for nearby places: {numbers}")
     print(f"Length of numbers list: {len(numbers)}")
     print(f"Average Population Density: {Avg_population_density}")
+    print(f"Average Traffic Time (minutes): {avg_traffic}")
+    print(f"Distance to Nearest Main Road (meters): {distance_to_main_road}")
 
 # Example usage
 lat, lng = 10.003391878837881, 76.34690985147948  # Example coordinates

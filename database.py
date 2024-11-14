@@ -1,67 +1,120 @@
 import requests
-import pandas as pd
+import openpyxl
+import time
 
-# Replace with your own Google API key
-API_KEY = 'AIzaSyCVeN37-ybdydrRSXk5FpKosicyARl7GwY'
 
-def get_nearby_places(api_key, location, radius, place_type):
-    # Define the endpoint URL
-    endpoint_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+place_density = {
+    "Airport": 5,
+    "Amusement Park": 5,
+    "Aquarium": 3,
+    "Art Gallery": 3,
+    "Bakery": 3,
+    "Bank": 4,
+    "Bar": 5,
+    "Book Store": 3,
+    "Bus Station": 5,
+    "Cafe": 4,
+    "Campground": 2,
+    "Car Rental": 3,
+    "Car Repair": 3,
+    "Casino": 4,
+    "Cemetery": 1,
+    "Church": 4,
+    "City Hall": 4,
+    "Clothing Store": 4,
+    "Courthouse": 3,
+    "Dentist": 3,
+    "Department Store": 5,
+    "Doctor": 4,
+    "Electrician": 2,
+    "Embassy": 4,
+    "Fire Station": 3,
+    "Florist": 3,
+    "Funeral Home": 2,
+    "Furniture Store": 2,
+    "Gas Station": 2,
+    "Gym": 4,
+    "Hair Salon": 3,
+    "Hospital": 5,
+    "Hotel": 4,
+    "Jewelry Store": 3,
+    "Library": 3,
+    "Liquor Store": 4,
+    "Local Government Office": 4,
+    "Mall": 5,
+    "Movie Theater": 5,
+    "Museum": 4,
+    "Night Club": 5,
+    "Park": 3,
+    "Pharmacy": 4,
+    "Police Station": 3,
+    "Post Office": 4,
+    "Restaurant": 5,
+    "School": 4,
+    "Shopping Mall": 5,
+    "Stadium": 5,
+    "Subway Station": 5,
+    "Supermarket": 5,
+    "Train Station": 5,
+    "University": 4,
+    "Zoo": 4
+}
+
+# You can print the dictionary to verify
+#print(place_density)
+
+
+
+
+# Your Google API Key
+GOOGLE_MAPS_API_KEY = 'YOUR API KEY'
+
+# Function to get nearby establishments within 1 km
+def get_nearby_establishments(lat, lng, radius=1000):
+    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={lat},{lng}&radius={radius}&key={GOOGLE_MAPS_API_KEY}"
     
-    # Set up the parameters for the request
-    params = {
-        'location': location,  # Latitude and Longitude as a string "lat,lng"
-        'radius': radius,      # Radius in meters
-        'type': place_type,    # Type of place (e.g., restaurant, park, etc.)
-        'key': api_key         # Your API key
-    }
-    
-    # Make the request to the Places API
-    response = requests.get(endpoint_url, params=params)
-    
-    # Check if the response is OK (status code 200)
+    response = requests.get(url)
     if response.status_code == 200:
-        print(response.json())
-        return response.json()
+        places = response.json().get('results', [])
+        return places
     else:
-        print(f"Error: {response.status_code}")
-        return None
+        return []
 
-def places_to_dataframe(places_data):
-    # Extract relevant details into a list of dictionaries
-    places_list = []
+# Function to get numeric value for a place type from the dictionary
+def get_numeric_value_for_place(place_type):
+    # Look up the place type in the dictionary
+    return place_density.get(place_type.lower(), None)  # Return None if the place type is not found
 
-    for place in places_data.get('results', []):
-        place_info = {
-            'Name': place.get('name'),
-            'Address': place.get('vicinity'),
-            'Rating': place.get('rating', 'N/A'),
-            'User Ratings Total': place.get('user_ratings_total', 'N/A'),
-            'Latitude': place['geometry']['location']['lat'],
-            'Longitude': place['geometry']['location']['lng']
-        }
-        places_list.append(place_info)
-    # Convert the list to a DataFrame
-    df = pd.DataFrame(places_list)
-    return df
+# Main function to handle user input and show results
+def find_restaurant_details(lat, lng, restaurant_type):
+    # Get nearby establishments within 1 km
+    nearby_establishments = get_nearby_establishments(lat, lng)
 
-def save_to_excel(df, filename='places_output.xlsx'):
-    # Save DataFrame to Excel file
-    df.to_excel(filename, index=False)
-    print(f"Data successfully saved to {filename}")
+    # Initialize a list to store numeric values corresponding to place types
+    numbers = []
 
-if __name__ == "__main__":
-    # Define your search parameters
-    location = "10.016786,76.3412057"  # Example: Latitude,Longitude (New York)
-    radius = 1500  # Search within 1500 meters
-    place_type = "restaurant"  # Type of places you are searching for
-    
-    # Get nearby places data
-    places_data = get_nearby_places(API_KEY, location, radius, place_type)
-    
-    if places_data:
-        # Convert the results to a DataFrame
-        df = places_to_dataframe(places_data)
+    # Iterate through the nearby establishments and check their types against the dictionary
+    for place in nearby_establishments:
+        place_types = place.get('types', [])  # List of types for the place
         
-        # Save the DataFrame to an Excel file
-        save_to_excel(df, 'nearby_places.xlsx')
+        for place_type in place_types:
+            # Get the numeric value for this place type from the dictionary
+            numeric_value = get_numeric_value_for_place(place_type)
+            if numeric_value is not None:
+                numbers.append(numeric_value)
+    
+    # Calculate the average population density based on the numbers list
+    if numbers:
+        Avg_population_density = sum(numbers) / len(numbers)
+    else:
+        Avg_population_density = 0
+
+    # Display the results
+    print(f"Nearby Establishments within 1 km: {nearby_establishments}")
+    print(f"List of numeric values (population densities) for nearby places: {numbers}")
+    print(f"Average Population Density: {Avg_population_density}")
+
+# Example usage
+lat, lng = 10.003391878837881, 76.34690985147948  # Example coordinates (Bangalore)
+restaurant_type = "Chinese"
+find_restaurant_details(lat, lng, restaurant_type)

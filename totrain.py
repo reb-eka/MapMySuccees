@@ -4,12 +4,12 @@ import time
 import json
 import math
 
+# Your Google API Key
+GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY'
+
 # Load data from data.json
 with open('data.json', 'r') as json_file:
     place_data = json.load(json_file)
-
-# Your Google API Key
-GOOGLE_MAPS_API_KEY = 'YOUR API KEY'
 
 # Function to get nearby establishments within 1 km, including paginated results
 def get_nearby_establishments(lat, lng, radius=1000):
@@ -73,9 +73,6 @@ def calculate_average_traffic(lat, lng, radius=1000):
     if response.status_code == 200:
         data = response.json()
         
-        # Print the full API response to debug
-        print("API Response:", json.dumps(data, indent=2))  # Use json.dumps to format the output
-        
         travel_times = []
         
         # Iterate through the response rows and elements
@@ -91,10 +88,8 @@ def calculate_average_traffic(lat, lng, radius=1000):
             avg_traffic_time = sum(travel_times) / len(travel_times)  # Calculate average in seconds
             return avg_traffic_time / 60  # Convert to minutes
         else:
-            print("No travel times found in the response.")
             return None
     else:
-        print(f"Error fetching traffic data. Status code: {response.status_code}")
         return None
 
 # Function to convert traffic time to traffic severity (1-5 scale)
@@ -130,7 +125,6 @@ def find_distance_to_nearest_main_road(lat, lng):
         else:
             return None
     else:
-        print("Error fetching road data.")
         return None
 
 # Function to calculate the distance between two latitude and longitude points (Haversine formula)
@@ -142,6 +136,21 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     distance = R * c  # Distance in kilometers
     return distance * 1000  # Convert to meters
+
+# Function to read the Excel file and extract the latitude and longitude
+def process_excel_file(file_path):
+    # Load the Excel workbook
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook.active
+
+    # Iterate over the rows in the Excel sheet
+    for row in sheet.iter_rows(min_row=2, values_only=True):  # Skip header row
+        name, address, rating, rating_total, latitude, longitude = row
+
+        # Ensure latitude and longitude are present
+        if latitude and longitude:
+            print(f"Processing {name}: Lat {latitude}, Lng {longitude}")
+            find_restaurant_details(latitude, longitude, name)
 
 # Main function to handle user input and show results
 def find_restaurant_details(lat, lng, restaurant_type):
@@ -192,14 +201,11 @@ def find_restaurant_details(lat, lng, restaurant_type):
     print(f"Unique Place Categories within 1 km: {places}")
     print(f"Length of places list: {len(places)}")
     print(f"List of numeric values (population densities) for nearby places: {numbers}")
-    print("\n----------------\n")
-    #print(f"Length of numbers list: {len(numbers)}")
     print(f"Average Population Density: {Avg_population_density}")
-    #print(f"Average Traffic Time (minutes): {avg_traffic}")
     print(f"Traffic Severity (1-5): {traffic_severity}")
     print(f"Distance to Nearest Main Road (meters): {distance_to_main_road}")
+    print()
 
-# Example usage
-lat, lng = 10.003626454704857, 76.34676355397232  # Example coordinates
-restaurant_type = "Chinese"
-find_restaurant_details(lat, lng, restaurant_type)
+# Provide the Excel file path
+file_path = "all_nearby_places1.xlsx"
+process_excel_file(file_path)

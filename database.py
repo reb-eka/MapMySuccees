@@ -2,6 +2,7 @@ import requests
 import openpyxl
 import time
 import json
+import math
 
 # Load data from data.json
 with open('data.json', 'r') as json_file:
@@ -63,17 +64,53 @@ def calculate_average_traffic(lat, lng, radius=1000):
         f"{lat},{lng + 0.005}",
         f"{lat},{lng - 0.005}"
     ]
+    
     url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={lat},{lng}&destinations={'|'.join(destinations)}&departure_time=now&key={GOOGLE_MAPS_API_KEY}"
     
+    # Make the API request
     response = requests.get(url)
+    
     if response.status_code == 200:
         data = response.json()
-        travel_times = [element['duration_in_traffic']['value'] for row in data['rows'] for element in row['elements']]
-        avg_traffic_time = sum(travel_times) / len(travel_times) if travel_times else None
-        return avg_traffic_time / 60 if avg_traffic_time else None  # Convert to minutes
+        
+        # Print the full API response to debug
+        print("API Response:", json.dumps(data, indent=2))  # Use json.dumps to format the output
+        
+        travel_times = []
+        
+        # Iterate through the response rows and elements
+        for row in data.get('rows', []):
+            for element in row.get('elements', []):
+                # Try to get 'duration_in_traffic', fallback to 'duration' if not available
+                if 'duration_in_traffic' in element:
+                    travel_times.append(element['duration_in_traffic']['value'])  # Get traffic time in seconds
+                elif 'duration' in element:
+                    travel_times.append(element['duration']['value'])  # Fallback to normal travel time
+        
+        if travel_times:
+            avg_traffic_time = sum(travel_times) / len(travel_times)  # Calculate average in seconds
+            return avg_traffic_time / 60  # Convert to minutes
+        else:
+            print("No travel times found in the response.")
+            return None
     else:
-        print("Error fetching traffic data.")
+        print(f"Error fetching traffic data. Status code: {response.status_code}")
         return None
+
+# Function to convert traffic time to traffic severity (1-5 scale)
+def convert_traffic_time_to_severity(avg_traffic_time):
+    if avg_traffic_time is None:
+        return 0  # No traffic data
+    if avg_traffic_time < 5:
+        return 1  # Low traffic
+    elif avg_traffic_time < 10:
+        return 2  # Moderate traffic
+    elif avg_traffic_time < 15:
+        return 3  # Heavy traffic
+    elif avg_traffic_time < 20:
+        return 4  # Very heavy traffic
+    else:
+        return 5  # Severe traffic
 
 # Function to find the distance to the nearest main road using Google Maps Roads API
 def find_distance_to_nearest_main_road(lat, lng):
@@ -97,7 +134,6 @@ def find_distance_to_nearest_main_road(lat, lng):
         return None
 
 # Function to calculate the distance between two latitude and longitude points (Haversine formula)
-import math
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in kilometers
     d_lat = math.radians(lat2 - lat1)
@@ -146,6 +182,9 @@ def find_restaurant_details(lat, lng, restaurant_type):
     # Get average traffic in the area
     avg_traffic = calculate_average_traffic(lat, lng)
 
+    # Convert traffic time to a severity rating (1-5)
+    traffic_severity = convert_traffic_time_to_severity(avg_traffic)
+
     # Find distance to nearest main road
     distance_to_main_road = find_distance_to_nearest_main_road(lat, lng)
 
@@ -156,9 +195,10 @@ def find_restaurant_details(lat, lng, restaurant_type):
     print(f"Length of numbers list: {len(numbers)}")
     print(f"Average Population Density: {Avg_population_density}")
     print(f"Average Traffic Time (minutes): {avg_traffic}")
+    print(f"Traffic Severity (1-5): {traffic_severity}")
     print(f"Distance to Nearest Main Road (meters): {distance_to_main_road}")
 
 # Example usage
-lat, lng = 10.003391878837881, 76.34690985147948  # Example coordinates
+lat, lng = 9.996898484919592, 76.36078630051198  # Example coordinates
 restaurant_type = "Chinese"
 find_restaurant_details(lat, lng, restaurant_type)

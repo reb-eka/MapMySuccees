@@ -64,8 +64,6 @@ place_density = {
 #print(place_density)
 
 
-
-
 # Your Google API Key
 GOOGLE_MAPS_API_KEY = 'YOUR API KEY'
 
@@ -81,28 +79,41 @@ def get_nearby_establishments(lat, lng, radius=1000):
         return []
 
 # Function to get numeric value for a place type from the dictionary
-def get_numeric_value_for_place(place_type):
-    # Look up the place type in the dictionary
-    return place_density.get(place_type.lower(), None)  # Return None if the place type is not found
+def get_numeric_value_for_place(place_category):
+    # Look up the place category in the dictionary
+    return place_density.get(place_category, None)
+
+# Function to map Google's place types to a broader category in the place_density dictionary
+def map_to_broader_category(place_types):
+    # We'll check if any place types map directly to our place_density categories
+    for place_type in place_types:
+        # Capitalize the place_type to match the keys in place_density dictionary
+        broader_category = place_density.get(place_type.capitalize(), None)
+        if broader_category is not None:
+            return place_type.capitalize()  # Return the first matched broader category
+    return None
 
 # Main function to handle user input and show results
 def find_restaurant_details(lat, lng, restaurant_type):
     # Get nearby establishments within 1 km
     nearby_establishments = get_nearby_establishments(lat, lng)
 
-    # Initialize a list to store numeric values corresponding to place types
+    # Initialize a list to store numeric values corresponding to place categories
     numbers = []
 
     # Iterate through the nearby establishments and check their types against the dictionary
     for place in nearby_establishments:
         place_types = place.get('types', [])  # List of types for the place
         
-        for place_type in place_types:
-            # Get the numeric value for this place type from the dictionary
-            numeric_value = get_numeric_value_for_place(place_type)
+        # Try to map the place types to a broader category
+        broader_category = map_to_broader_category(place_types)
+
+        if broader_category:
+            # Get the numeric value for this broader category from the dictionary
+            numeric_value = get_numeric_value_for_place(broader_category)
             if numeric_value is not None:
                 numbers.append(numeric_value)
-    
+
     # Calculate the average population density based on the numbers list
     if numbers:
         Avg_population_density = sum(numbers) / len(numbers)
@@ -110,11 +121,11 @@ def find_restaurant_details(lat, lng, restaurant_type):
         Avg_population_density = 0
 
     # Display the results
-    print(f"Nearby Establishments within 1 km: {nearby_establishments}")
+    print(f"Nearby Establishments within 1 km: {[place['name'] for place in nearby_establishments]}")
     print(f"List of numeric values (population densities) for nearby places: {numbers}")
     print(f"Average Population Density: {Avg_population_density}")
 
 # Example usage
-lat, lng = 10.003391878837881, 76.34690985147948  # Example coordinates (Bangalore)
+lat, lng = 10.003391878837881, 76.34690985147948  # Example coordinates
 restaurant_type = "Chinese"
 find_restaurant_details(lat, lng, restaurant_type)

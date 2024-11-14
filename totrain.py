@@ -12,7 +12,7 @@ with open('data.json', 'r') as json_file:
     place_data = json.load(json_file)
 
 # Function to get nearby establishments within 1 km, including paginated results
-def get_nearby_establishments(lat, lng, radius=1000):
+def get_nearby_establishments(lat, lng, radius=500):
     places = []
     url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={lat},{lng}&radius={radius}&key={GOOGLE_MAPS_API_KEY}"
 
@@ -56,7 +56,7 @@ def get_numeric_value_for_place(place_category):
     return normalized_json_keys.get(place_category, None)
 
 # Function to calculate average traffic using Google Maps Distance Matrix API
-def calculate_average_traffic(lat, lng, radius=1000):
+def calculate_average_traffic(lat, lng, radius=500):
     # Define destinations for traffic checks (some random points within 1km)
     destinations = [
         f"{lat + 0.005},{lng}",
@@ -137,22 +137,135 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     distance = R * c  # Distance in kilometers
     return distance * 1000  # Convert to meters
 
-# Function to read the Excel file and extract the latitude and longitude
+# Function to write the calculated data into the Excel file
+def write_data_to_excel(file_path, row_num, avg_pdensity, traffic_rate, visibility, comp_presence):
+    # Load the workbook and select the active sheet
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook.active
+
+    # Write the calculated values into the respective columns
+    sheet[f'G{row_num}'] = avg_pdensity  # Assuming AVG_PDENSITY is in column G
+    sheet[f'H{row_num}'] = traffic_rate  # Assuming TRAFFIC_RATE is in column H
+    sheet[f'I{row_num}'] = visibility  # Assuming VISIBILITY is in column I
+    sheet[f'J{row_num}'] = comp_presence  # Assuming COMPETITION_PRESENCE is in column J
+
+    # Save the workbook to preserve changes
+    workbook.save(file_path)
+
+# Function to process each row of the Excel file and extract the latitude and longitude
 def process_excel_file(file_path):
     # Load the Excel workbook
     workbook = openpyxl.load_workbook(file_path)
     sheet = workbook.active
 
     # Iterate over the rows in the Excel sheet
-    for row in sheet.iter_rows(min_row=2, values_only=True):  # Skip header row
+    for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):  # Skip header row and start from row 2
         name, address, rating, rating_total, latitude, longitude = row
 
         # Ensure latitude and longitude are present
         if latitude and longitude:
             print(f"Processing {name}: Lat {latitude}, Lng {longitude}")
-            find_restaurant_details(latitude, longitude, name)
+            # Get the calculated metrics
+            avg_pdensity, traffic_rate, visibility ,comp_presence= find_restaurant_details(latitude, longitude, name)
 
-# Main function to handle user input and show results
+            # Write the calculated data to the Excel file
+            write_data_to_excel(file_path, idx, avg_pdensity, traffic_rate, visibility, comp_presence)
+
+
+
+# Function to get nearby restaurants within 500 meters
+def get_nearby_restaurants(lat, lng, radius=5000):
+    restaurants = []
+    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={lat},{lng}&radius={radius}&type=restaurant&key={GOOGLE_MAPS_API_KEY}"
+    
+    while url:
+        response = requests.get(url)
+        if response.status_code == 200:
+            result = response.json()
+            places = result.get('results', [])
+            restaurants.extend(places)  # Add new restaurants to the list
+
+            # Check if there's a next_page_token
+            next_page_token = result.get('next_page_token')
+            if next_page_token:
+                url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?pagetoken={next_page_token}&key={GOOGLE_MAPS_API_KEY}"
+                time.sleep(2)  # Required delay before requesting the next page
+            else:
+                # No more pages to fetch
+                url = None
+        else:
+            # If the API request fails, stop further requests
+            break
+
+    return restaurants
+
+# Function to filter same-type restaurants
+def filter_same_type_restaurants(restaurants, restaurant_type):
+    same_type_restaurants = []
+    for restaurant in restaurants:
+        types = restaurant.get('types', [])
+        if restaurant_type in types:
+            same_type_restaurants.append(restaurant)
+    return same_type_restaurants
+
+
+# Function to calculate competitor presence
+def calculate_competitor_presence(total_restaurants, same_type_restaurants):
+    # Total area of a 500m radius circle (fixed value)
+    AREA_500M_RADIUS = math.pi * (5000 ** 2)
+
+    # If no restaurants are found, return the lowest competition score
+    if total_restaurants == 0:
+        return 1  # No competition
+
+    # Calculate the competitor ratio (same-type to total)
+    competitor_ratio = same_type_restaurants / total_restaurants
+
+    # Calculate restaurant density
+    restaurant_density = total_restaurants / AREA_500M_RADIUS
+
+    # Calculate competition score
+    competition_score = (competitor_ratio * restaurant_density)
+
+    # Normalize the score to a range from 1 (low competition) to 5 (high competition)
+    return normalize_score(competition_score)
+
+# Function to normalize the competition score to a 1-5 scale
+def normalize_score(competition_score):
+    # Example thresholds (can be adjusted based on data insights)
+    if competition_score < 0.1:
+        return 1  # Low competition
+    elif competition_score < 0.3:
+        return 2  # Slight competition
+    elif competition_score < 0.5:
+        return 3  # Medium competition
+    elif competition_score < 0.7:
+        return 4  # High competition
+    else:
+        return 5  # Very high competition
+
+# Function to calculate competitor presence for a given location
+def competitor_presence_for_location(lat, lng, restaurant_type):
+    # Get nearby restaurants
+    restaurants = get_nearby_restaurants(lat, lng)
+
+    # Filter same-type restaurants
+    same_type_restaurants = filter_same_type_restaurants(restaurants, restaurant_type)
+
+    # Total number of restaurants
+    total_restaurants = len(restaurants)
+
+    # Same-type restaurants count
+    same_type_restaurant_count = len(same_type_restaurants)
+
+    # Calculate competitor presence
+    competitor_presence = calculate_competitor_presence(total_restaurants, same_type_restaurant_count)
+
+    return competitor_presence
+
+
+
+# Main function to handle user input and calculate required metrics
 def find_restaurant_details(lat, lng, restaurant_type):
     # Get nearby establishments within 1 km
     nearby_establishments = get_nearby_establishments(lat, lng)
@@ -197,14 +310,11 @@ def find_restaurant_details(lat, lng, restaurant_type):
     # Find distance to nearest main road
     distance_to_main_road = find_distance_to_nearest_main_road(lat, lng)
 
-    # Display the results
-    print(f"Unique Place Categories within 1 km: {places}")
-    print(f"Length of places list: {len(places)}")
-    print(f"List of numeric values (population densities) for nearby places: {numbers}")
-    print(f"Average Population Density: {Avg_population_density}")
-    print(f"Traffic Severity (1-5): {traffic_severity}")
-    print(f"Distance to Nearest Main Road (meters): {distance_to_main_road}")
-    print()
+    # Calculate competitor presence for the given coordinates and restaurant type
+    competitor_presence = competitor_presence_for_location(lat, lng, restaurant_type)
+    
+    # Return the calculated metrics
+    return Avg_population_density, traffic_severity, distance_to_main_road, competitor_presence
 
 # Provide the Excel file path
 file_path = "all_nearby_places1.xlsx"

@@ -247,6 +247,8 @@ def find_restaurant_details(lat, lng, restaurant_type):
     # Initialize a list to store numeric values corresponding to place categories
     numbers = []
 
+    final= []
+
     # Iterate through the nearby establishments and check their types against the JSON file
     for place in nearby_establishments:
         place_types = place.get('types', [])  # List of types for the place
@@ -284,6 +286,9 @@ def find_restaurant_details(lat, lng, restaurant_type):
 
     competitor_presence = competitor_presence_for_location(lat, lng, restaurant_type)
 
+    #Avg_population_density, traffic_severity, distance_to_main_road, competitor_presence, average_price_level
+    final = [name,lat,lng, price_range_str ,Avg_population_density,traffic_severity,distance_to_main_road,competitor_presence]
+
 
     # Display the results
     print(f"Unique Place Categories within 1 km: {places}")
@@ -296,9 +301,13 @@ def find_restaurant_details(lat, lng, restaurant_type):
     print(f"Traffic Severity (1-5): {traffic_severity}")
     print(f"Distance to Nearest Main Road (meters): {distance_to_main_road}")
     print(f"Competitor Presence for {restaurant_type.capitalize()} Restaurants: {competitor_presence}/5")
+    print("\n______________________________________________________________________\n")
+    print(final)
 
 
 # Example usage
 lat, lng = 9.99810742938937, 76.3614687596429  # Example coordinates
+name = "Aryaas"
 restaurant_type = "South Indian Restaurant"
+price_range_str = "1-200"
 find_restaurant_details(lat, lng, restaurant_type)

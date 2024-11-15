@@ -138,7 +138,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return distance * 1000  # Convert to meters
 
 # Function to write the calculated data into the Excel file
-def write_data_to_excel(file_path, row_num, avg_pdensity, traffic_rate, visibility, comp_presence):
+def write_data_to_excel(file_path, row_num, avg_pdensity, traffic_rate, visibility, comp_presence, average_price_level):
     # Load the workbook and select the active sheet
     workbook = openpyxl.load_workbook(file_path)
     sheet = workbook.active
@@ -148,6 +148,7 @@ def write_data_to_excel(file_path, row_num, avg_pdensity, traffic_rate, visibili
     sheet[f'H{row_num}'] = traffic_rate  # Assuming TRAFFIC_RATE is in column H
     sheet[f'I{row_num}'] = visibility  # Assuming VISIBILITY is in column I
     sheet[f'J{row_num}'] = comp_presence  # Assuming COMPETITION_PRESENCE is in column J
+    sheet[f'K{row_num}'] = average_price_level  # Assuming COMPETITION_PRESENCE is in column J
 
     # Save the workbook to preserve changes
     workbook.save(file_path)
@@ -160,16 +161,16 @@ def process_excel_file(file_path):
 
     # Iterate over the rows in the Excel sheet
     for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):  # Skip header row and start from row 2
+        print(row)
         name, address, rating, rating_total, latitude, longitude = row
-
         # Ensure latitude and longitude are present
         if latitude and longitude:
             print(f"Processing {name}: Lat {latitude}, Lng {longitude}")
             # Get the calculated metrics
-            avg_pdensity, traffic_rate, visibility ,comp_presence= find_restaurant_details(latitude, longitude, name)
+            avg_pdensity, traffic_rate, visibility ,comp_presence, average_price_level= find_restaurant_details(latitude, longitude, name)
 
             # Write the calculated data to the Excel file
-            write_data_to_excel(file_path, idx, avg_pdensity, traffic_rate, visibility, comp_presence)
+            write_data_to_excel(file_path, idx, avg_pdensity, traffic_rate, visibility, comp_presence, average_price_level)
 
 
 
@@ -265,6 +266,115 @@ def competitor_presence_for_location(lat, lng, restaurant_type):
 
 
 
+
+# Function to find a restaurant's price range using the Google Places API
+def get_place_id(place_name, api_key):
+    """
+    Use Google Places API to find the place_id for a given place name.
+    """
+    url = f"https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input={place_name}&inputtype=textquery&key={api_key}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data.get('candidates'):
+            return data['candidates'][0]['place_id']  # Return the first match place_id
+        else:
+            return None
+    else:
+        print(f"Error fetching place_id for {place_name}: {response.status_code}")
+        return None
+
+def get_place_details(place_id, api_key):
+    """
+    Use Google Places API to get the details of a place by place_id.
+    """
+    url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields=price_level&key={api_key}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if 'result' in data:
+            # Return the price level, or None if not available
+            return data['result'].get('price_level', 'N/A')
+        else:
+            return 'N/A'
+    else:
+        print(f"Error fetching place details for place_id {place_id}: {response.status_code}")
+        return 'N/A'
+
+# Function to read restaurant names from an Excel file
+def read_place_names_from_excel(file_path):
+    """
+    Read the place names from the Excel file.
+    """
+    place_names = []
+    
+    # Load the workbook and the first sheet
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook.active
+    
+    # Assuming the place names are in the first column (A)
+    for row in sheet.iter_rows(min_row=2, max_col=1, values_only=True):  # Skip the header
+        place_name = row[0]  # Get the place name from column A
+        if place_name:
+            place_names.append(place_name)
+    
+    return place_names
+
+# Function to update the price range in the Excel file
+def update_excel_with_price_ranges(file_path, price_ranges):
+    """
+    Write the price range values into the Excel file.
+    """
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook.active
+    
+    # Assuming price range should be written to column B (next to place names)
+    for idx, price_range in enumerate(price_ranges, start=2):
+        sheet[f'B{idx}'] = price_range  # Write price range to column B
+    
+    # Save the updated workbook
+    workbook.save(file_path)
+
+# Main function to process the data
+def process_places_and_update_excel(file_path, api_key):
+    """
+    Main function that reads the Excel file, fetches price range, and updates the Excel.
+    """
+    # Read place names from the Excel file
+    place_names = read_place_names_from_excel(file_path)
+    
+    # List to store price ranges
+    price_ranges = []
+    
+    # Iterate over each place name and fetch its price range
+    for place_name in place_names:
+        print(f"Fetching price range for: {place_name}")
+        
+        # Get place_id using the place name
+        place_id = get_place_id(place_name, api_key)
+        
+        if place_id:
+            # Get the place details (price range) using the place_id
+            price_range = get_place_details(place_id, api_key)
+        else:
+            price_range = 'Not Found'
+        
+        # Append the price range to the list
+        price_ranges.append(price_range)
+    
+    # Update the Excel file with the retrieved price ranges
+    update_excel_with_price_ranges(file_path, price_ranges)
+    print(f"Updated price ranges in {file_path}.")
+
+
+
+
+
+
+
+
 # Main function to handle user input and calculate required metrics
 def find_restaurant_details(lat, lng, restaurant_type):
     # Get nearby establishments within 1 km
@@ -275,6 +385,9 @@ def find_restaurant_details(lat, lng, restaurant_type):
     
     # Initialize a list to store numeric values corresponding to place categories
     numbers = []
+
+    # Initialize a list to store price levels of restaurants
+    price_levels = []
 
     # Iterate through the nearby establishments and check their types against the JSON file
     for place in nearby_establishments:
@@ -295,6 +408,25 @@ def find_restaurant_details(lat, lng, restaurant_type):
             if numeric_value is not None and broader_category not in numbers:
                 numbers.append(int(numeric_value))  # Ensure numeric value is an integer
 
+            # Fetch the price level for restaurant-type places
+            if 'restaurant' in place_types:
+                place_id = place.get('place_id')
+                if place_id:
+                    price_level = get_place_details(place_id, GOOGLE_MAPS_API_KEY)
+                    
+                    # Ensure price_level is numeric (convert if needed) or append 0 if it's invalid
+                    try:
+                        if price_level is not None and price_level != 'N/A':
+                            # Ensure price_level is an integer
+                            price_levels.append(int(price_level))
+                        else:
+                            # Append a default value of 0 if price_level is 'None' or 'N/A'
+                            price_levels.append(0)
+                    except ValueError:
+                        # If price_level is not a valid integer, append 0
+                        price_levels.append(0)
+
+
     # Calculate the average population density based on the numbers list
     if numbers:
         Avg_population_density = sum(numbers) / len(numbers)
@@ -312,9 +444,16 @@ def find_restaurant_details(lat, lng, restaurant_type):
 
     # Calculate competitor presence for the given coordinates and restaurant type
     competitor_presence = competitor_presence_for_location(lat, lng, restaurant_type)
+
+
+    if price_levels:
+        average_price_level = sum(price_levels) / len(price_levels)
+    else:
+        average_price_level = None  # No price levels available
+
     
     # Return the calculated metrics
-    return Avg_population_density, traffic_severity, distance_to_main_road, competitor_presence
+    return Avg_population_density, traffic_severity, distance_to_main_road, competitor_presence, average_price_level
 
 # Provide the Excel file path
 file_path = "all_nearby_places1.xlsx"

@@ -5,7 +5,7 @@ import json
 import math
 
 # Your Google API Key
-GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY'
+GOOGLE_MAPS_API_KEY = 'YOUR API KEY'
 
 # Load data from data.json
 with open('data.json', 'r') as json_file:
@@ -175,7 +175,7 @@ def process_excel_file(file_path):
 
 
 # Function to get nearby restaurants within 500 meters
-def get_nearby_restaurants(lat, lng, radius=5000):
+def get_nearby_restaurants(lat, lng, radius=1000):
     restaurants = []
     url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={lat},{lng}&radius={radius}&type=restaurant&key={GOOGLE_MAPS_API_KEY}"
     
@@ -213,26 +213,35 @@ def filter_same_type_restaurants(restaurants, restaurant_type):
 # Function to calculate competitor presence
 def calculate_competitor_presence(total_restaurants, same_type_restaurants):
     # Total area of a 500m radius circle (fixed value)
-    AREA_500M_RADIUS = math.pi * (5000 ** 2)
+    AREA_500M_RADIUS = math.pi * (500**2)
 
     # If no restaurants are found, return the lowest competition score
     if total_restaurants == 0:
-        return 1  # No competition
+        return 0  # No competition
+
+    print("Same Type = ",same_type_restaurants,"    " , "Total Restaurants = ",total_restaurants )
+   
 
     # Calculate the competitor ratio (same-type to total)
-    competitor_ratio = same_type_restaurants / total_restaurants
+    competitor_ratio = 0.65 * same_type_restaurants + 0.25 * total_restaurants
+    print(competitor_ratio)
+    print("/n")
 
-    # Calculate restaurant density
+    """# Calculate restaurant density
     restaurant_density = total_restaurants / AREA_500M_RADIUS
+    print(restaurant_density)
+    print("/n")
 
     # Calculate competition score
     competition_score = (competitor_ratio * restaurant_density)
 
-    # Normalize the score to a range from 1 (low competition) to 5 (high competition)
-    return normalize_score(competition_score)
+    # Normalize the score to a range from 1 (low competition) to 5 (high competition)"""
+    return competitor_ratio
+
+    #return normalize_score(competition_score)
 
 # Function to normalize the competition score to a 1-5 scale
-def normalize_score(competition_score):
+"""def normalize_score(competition_score):
     # Example thresholds (can be adjusted based on data insights)
     if competition_score < 0.1:
         return 1  # Low competition
@@ -244,7 +253,7 @@ def normalize_score(competition_score):
         return 4  # High competition
     else:
         return 5  # Very high competition
-
+"""
 # Function to calculate competitor presence for a given location
 def competitor_presence_for_location(lat, lng, restaurant_type):
     # Get nearby restaurants
@@ -456,5 +465,5 @@ def find_restaurant_details(lat, lng, restaurant_type):
     return Avg_population_density, traffic_severity, distance_to_main_road, competitor_presence, average_price_level
 
 # Provide the Excel file path
-file_path = "all_nearby_places1.xlsx"
+file_path = "all_nearby_places2.xlsx"
 process_excel_file(file_path)
